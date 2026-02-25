@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls, useGLTF, useTexture } from '@react-three/drei';
+import { OrbitControls, Text, useGLTF, useTexture } from '@react-three/drei';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
 import { XRControllerModelFactory } from 'three/examples/jsm/webxr/XRControllerModelFactory.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
@@ -44,9 +44,9 @@ const tempForward = new THREE.Vector3();
 const tempEuler = new THREE.Euler();
 
 const MODEL_OPTIONS = [
-  { id: 'armA', image: '/armA.png', modelPath: '/models/armA.glb' },
-  { id: 'armB', image: '/armB.png', modelPath: '/models/armB.glb' },
-  { id: 'armC', image: '/armC.png', modelPath: '/models/armC.glb' },
+ // { id: 'armA', image: '/armA.png', modelPath: '/models/armA.glb', name:"Prismatic Joint" },
+  { id: 'armB', image: '/armB.png', modelPath: '/models/armB.glb', name:"Prismatic Joint" },
+  { id: 'armC', image: '/armC.png', modelPath: '/models/armC.glb', name:"Revolution Joint" },
 ] as const;
 
 type ModelId = (typeof MODEL_OPTIONS)[number]['id'];
@@ -56,6 +56,7 @@ function JointGizmo({ target, mode }: { target: THREE.Object3D; mode: GizmoMode 
   const groupRef = useRef<THREE.Group>(null);
 
   const lineLength = 0.28;
+  const gizmoScale = 0.96;
   const xLine = useMemo(
     () =>
       new THREE.Line(
@@ -127,10 +128,46 @@ function JointGizmo({ target, mode }: { target: THREE.Object3D; mode: GizmoMode 
   });
 
   return (
-    <group ref={groupRef} scale={[0.16, 0.16, 0.16]}>
+    <group ref={groupRef} scale={[gizmoScale, gizmoScale, gizmoScale]}>
       <primitive object={xLine} />
       <primitive object={yLine} />
       <primitive object={zLine} />
+      <Text
+        position={[lineLength + 0.03, 0, 0]}
+        color="#ff6b6b"
+        fontSize={0.08}
+        anchorX="center"
+        anchorY="middle"
+        renderOrder={1000}
+        material-depthTest={false}
+        material-depthWrite={false}
+      >
+        x
+      </Text>
+      <Text
+        position={[0, lineLength + 0.03, 0]}
+        color="#6bff9c"
+        fontSize={0.08}
+        anchorX="center"
+        anchorY="middle"
+        renderOrder={1000}
+        material-depthTest={false}
+        material-depthWrite={false}
+      >
+        y
+      </Text>
+      <Text
+        position={[0, 0, lineLength + 0.03]}
+        color="#6bb7ff"
+        fontSize={0.08}
+        anchorX="center"
+        anchorY="middle"
+        renderOrder={1000}
+        material-depthTest={false}
+        material-depthWrite={false}
+      >
+        z
+      </Text>
       {mode === 'rotate' && (
         <>
           <mesh rotation={[0, Math.PI / 2, 0]} renderOrder={1000}>
@@ -734,7 +771,7 @@ export default function App() {
                 alt={option.id}
                 style={{ width: '100%', height: '160px', objectFit: 'cover', borderRadius: '8px', display: 'block' }}
               />
-              <div style={{ marginTop: '10px', fontSize: '16px', fontWeight: 600 }}>{option.id}</div>
+              <div style={{ marginTop: '10px', fontSize: '16px', fontWeight: 600 }}>{option.name}</div>
             </button>
           ))}
         </div>
