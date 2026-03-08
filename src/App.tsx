@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Text, useGLTF, useTexture } from '@react-three/drei';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
@@ -256,6 +256,7 @@ function JointGizmo({ target, mode }: { target: THREE.Object3D; mode: GizmoMode 
 function ArmModel({ modelPath, onReady }: ArmProps) {
   const { scene } = useGLTF(modelPath);
   const wrapperRef = useRef<THREE.Group>(null);
+  const [groundOffset, setGroundOffset] = useState(0);
 
   const model = useMemo(() => {
     const cloned = SkeletonUtils.clone(scene) as THREE.Object3D;
@@ -272,6 +273,11 @@ function ArmModel({ modelPath, onReady }: ArmProps) {
     return cloned;
   }, [scene]);
 
+  useLayoutEffect(() => {
+    const box = new THREE.Box3().setFromObject(model);
+    setGroundOffset(-box.min.y);
+  }, [model]);
+
   useEffect(() => {
     if (!wrapperRef.current) {
       return;
@@ -279,15 +285,16 @@ function ArmModel({ modelPath, onReady }: ArmProps) {
 
     wrapperRef.current.updateMatrixWorld(true);
 
-    const box = new THREE.Box3().setFromObject(wrapperRef.current);
+    const box = new THREE.Box3().setFromObject(model);
     const center = box.getCenter(tempCenter.clone());
     const size = box.getSize(tempSize.clone());
     const radius = Math.max(size.x, size.y, size.z) * 0.5 || 0.5;
+    center.y += groundOffset;
 
     const meshes: THREE.Mesh[] = [];
     const bones: THREE.Bone[] = [];
 
-    wrapperRef.current.traverse((child) => {
+    model.traverse((child) => {
       if (child instanceof THREE.Mesh) {
         meshes.push(child);
       }
@@ -309,11 +316,11 @@ function ArmModel({ modelPath, onReady }: ArmProps) {
     }
 
     onReady(wrapperRef.current, meshes, joints, center, radius);
-  }, [model, onReady]);
+  }, [groundOffset, model, onReady]);
 
   return (
-    <group ref={wrapperRef} position={[0, 1.2, -1.4]} scale={[0.08, 0.08, 0.08]}>
-      <primitive object={model} />
+    <group ref={wrapperRef} position={[0, 0, -1.4]} scale={[0.08, 0.08, 0.08]}>
+      <primitive object={model} position={[0, groundOffset, 0]} />
     </group>
   );
 }
