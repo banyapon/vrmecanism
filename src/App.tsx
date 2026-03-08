@@ -23,13 +23,25 @@ type ActiveDrag = {
   startControllerPos: THREE.Vector3;
   startRotationX: number;
   startRotationY: number;
-  allowRotateY: boolean;
+  constraints: JointConstraint;
 };
 
 type ActiveMove = {
   controllerIndex: number;
   startControllerPos: THREE.Vector3;
   startRootPos: THREE.Vector3;
+};
+
+type AxisConstraint = {
+  enabled: boolean;
+  min?: number;
+  max?: number;
+};
+
+type JointConstraint = {
+  x?: AxisConstraint;
+  y?: AxisConstraint;
+  z?: AxisConstraint;
 };
 
 const raycaster = new THREE.Raycaster();
@@ -51,6 +63,43 @@ const MODEL_OPTIONS = [
 
 type ModelId = (typeof MODEL_OPTIONS)[number]['id'];
 type GizmoMode = 'rotate' | 'move';
+
+const deg = THREE.MathUtils.degToRad;
+
+const MODEL_JOINT_CONSTRAINTS: Partial<Record<ModelId, Record<string, JointConstraint>>> = {
+  armC: {
+    // Base swivel: spin around the vertical axis continuously.
+    Bone: {
+      y: { enabled: true },
+    },
+    // Shoulder hinge: tilt the arm within a 30 degree arc.
+    'Bone.001': {
+      x: { enabled: true, min: deg(-30), max: deg(30) },
+    },
+  },
+};
+
+function clampIfNeeded(value: number, constraint?: AxisConstraint): number {
+  if (!constraint?.enabled) {
+    return value;
+  }
+
+  let nextValue = value;
+
+  if (constraint.min !== undefined) {
+    nextValue = Math.max(constraint.min, nextValue);
+  }
+
+  if (constraint.max !== undefined) {
+    nextValue = Math.min(constraint.max, nextValue);
+  }
+
+  return nextValue;
+}
+
+function getJointConstraint(modelId: ModelId, target: THREE.Object3D): JointConstraint {
+  return MODEL_JOINT_CONSTRAINTS[modelId]?.[target.name] ?? {};
+}
 
 function JointGizmo({ target, mode }: { target: THREE.Object3D; mode: GizmoMode }) {
   const groupRef = useRef<THREE.Group>(null);
@@ -362,11 +411,13 @@ function XRInteraction({
   armRoot,
   pickableMeshes,
   rotatableTargets,
+  selectedModelId,
   onActiveJointChange,
 }: {
   armRoot: THREE.Object3D | null;
   pickableMeshes: THREE.Mesh[];
   rotatableTargets: THREE.Object3D[];
+  selectedModelId: ModelId;
   onActiveJointChange: (target: THREE.Object3D | null, mode?: GizmoMode) => void;
 }) {
   const { gl, scene } = useThree();
@@ -503,7 +554,7 @@ function XRInteraction({
         startControllerPos: tempControllerPos.clone(),
         startRotationX: targetJoint.rotation.x,
         startRotationY: targetJoint.rotation.y,
-        allowRotateY: handedness === 'left',
+        constraints: getJointConstraint(selectedModelId, targetJoint),
       };
 
       onActiveJointChange(targetJoint, gizmoMode);
@@ -563,7 +614,7 @@ function XRInteraction({
         controller.removeEventListener('squeezeend', onSqueezeEnd);
       });
     };
-  }, [armRoot, onActiveJointChange, pickableMeshes, rotatableTargets]);
+  }, [armRoot, onActiveJointChange, pickableMeshes, rotatableTargets, selectedModelId]);
 
   useFrame(() => {
     if (placeInFrontRef.current && armRoot) {
@@ -635,18 +686,15 @@ function XRInteraction({
     const deltaX = tempControllerPos.x - activeDrag.startControllerPos.x;
 
     const rotateBoost = 6.5;
-    activeDrag.target.rotation.x = THREE.MathUtils.clamp(
-      activeDrag.startRotationX + deltaY * rotateBoost,
-      -Math.PI * 0.95,
-      Math.PI * 0.95,
-    );
+    const xConstraint = activeDrag.constraints.x;
+    const yConstraint = activeDrag.constraints.y;
 
-    if (activeDrag.allowRotateY) {
-      activeDrag.target.rotation.y = THREE.MathUtils.clamp(
-        activeDrag.startRotationY + deltaX * rotateBoost,
-        -Math.PI * 0.95,
-        Math.PI * 0.95,
-      );
+    if (!xConstraint || xConstraint.enabled) {
+      activeDrag.target.rotation.x = clampIfNeeded(activeDrag.startRotationX + deltaY * rotateBoost, xConstraint);
+    }
+
+    if (!yConstraint || yConstraint.enabled) {
+      activeDrag.target.rotation.y = clampIfNeeded(activeDrag.startRotationY + deltaX * rotateBoost, yConstraint);
     }
   });
 
@@ -695,9 +743,16 @@ export default function App() {
     center: THREE.Vector3,
     radius: number,
   ) => {
+    const constrainedJoints = MODEL_JOINT_CONSTRAINTS[selectedModelId ?? 'armB']
+      ? joints.filter((joint) => {
+          const constraint = MODEL_JOINT_CONSTRAINTS[selectedModelId ?? 'armB']?.[joint.name];
+          return Boolean(constraint?.x?.enabled || constraint?.y?.enabled || constraint?.z?.enabled);
+        })
+      : joints;
+
     setArmRoot(root);
     setPickableMeshes(meshes);
-    setRotatableTargets(joints);
+    setRotatableTargets(constrainedJoints);
     setFocusCenter(center.clone());
     setFocusRadius(radius);
   };
@@ -821,6 +876,7 @@ export default function App() {
             armRoot={armRoot}
             pickableMeshes={pickableMeshes}
             rotatableTargets={rotatableTargets}
+            selectedModelId={selectedModelId!}
             onActiveJointChange={handleActiveJointChange}
           />
           <CameraFitter focusCenter={focusCenter} focusRadius={focusRadius} />
