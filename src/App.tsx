@@ -501,7 +501,7 @@ function XRInteraction({
         controllerIndex: Number(controller.userData.index),
         target: targetJoint,
         startControllerPos: tempControllerPos.clone(),
-        startRotationX: targetJoint.rotation.x,
+        startRotationX: targetJoint.rotation.z,
         startRotationY: targetJoint.rotation.y,
         allowRotateY: handedness === 'left',
       };
@@ -615,7 +615,11 @@ function XRInteraction({
       if (controller) {
         controller.getWorldPosition(tempControllerPos);
         const delta = tempControllerPos.clone().sub(activeMove.startControllerPos);
-        armRoot.position.copy(activeMove.startRootPos).add(delta);
+        armRoot.position.set(
+          activeMove.startRootPos.x + delta.z,
+          activeMove.startRootPos.y + delta.y,
+          activeMove.startRootPos.z + delta.x,
+        );
       }
     }
 
@@ -635,7 +639,7 @@ function XRInteraction({
     const deltaX = tempControllerPos.x - activeDrag.startControllerPos.x;
 
     const rotateBoost = 6.5;
-    activeDrag.target.rotation.x = THREE.MathUtils.clamp(
+    activeDrag.target.rotation.z = THREE.MathUtils.clamp(
       activeDrag.startRotationX + deltaY * rotateBoost,
       -Math.PI * 0.95,
       Math.PI * 0.95,
