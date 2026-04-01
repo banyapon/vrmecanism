@@ -45,8 +45,8 @@ const tempEuler = new THREE.Euler();
 
 const MODEL_OPTIONS = [
  // { id: 'armA', image: '/armA.png', modelPath: '/models/armA.glb', name:"Prismatic Joint" },
-  { id: 'armB', image: '/armB.png', modelPath: '/models/armB.glb', name:"Prismatic Joint" },
-  { id: 'armC', image: '/armC.png', modelPath: '/models/armC.glb', name:"Revolution Joint" },
+  { id: 'armB', image: '/armB.png', modelPath: '/models/armB.glb', name:"Prismatic Joint", allowRotateY: true },
+  { id: 'armC', image: '/armC.png', modelPath: '/models/armC.glb', name:"Revolution Joint", allowRotateY: false },
 ] as const;
 
 type ModelId = (typeof MODEL_OPTIONS)[number]['id'];
@@ -363,11 +363,13 @@ function XRInteraction({
   pickableMeshes,
   rotatableTargets,
   onActiveJointChange,
+  allowRotateY = true,
 }: {
   armRoot: THREE.Object3D | null;
   pickableMeshes: THREE.Mesh[];
   rotatableTargets: THREE.Object3D[];
   onActiveJointChange: (target: THREE.Object3D | null, mode?: GizmoMode) => void;
+  allowRotateY?: boolean;
 }) {
   const { gl, scene } = useThree();
   const activeDragRef = useRef<ActiveDrag | null>(null);
@@ -503,7 +505,7 @@ function XRInteraction({
         startControllerPos: tempControllerPos.clone(),
         startRotationX: targetJoint.rotation.z,
         startRotationY: targetJoint.rotation.y,
-        allowRotateY: handedness === 'left',
+        allowRotateY: allowRotateY,
       };
 
       onActiveJointChange(targetJoint, gizmoMode);
@@ -682,7 +684,8 @@ function CameraFitter({
 
 export default function App() {
   const [selectedModelId, setSelectedModelId] = useState<ModelId | null>(null);
-  const selectedModelPath = MODEL_OPTIONS.find((item) => item.id === selectedModelId)?.modelPath ?? null;
+  const selectedModel = MODEL_OPTIONS.find((item) => item.id === selectedModelId);
+  const selectedModelPath = selectedModel?.modelPath ?? null;
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
 
   const [activeGizmo, setActiveGizmo] = useState<{ target: THREE.Object3D; mode: GizmoMode } | null>(null);
@@ -826,6 +829,7 @@ export default function App() {
             pickableMeshes={pickableMeshes}
             rotatableTargets={rotatableTargets}
             onActiveJointChange={handleActiveJointChange}
+            allowRotateY={selectedModel?.allowRotateY ?? true}
           />
           <CameraFitter focusCenter={focusCenter} focusRadius={focusRadius} />
         </Suspense>
