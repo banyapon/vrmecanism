@@ -20,9 +20,11 @@ type ArmProps = {
 type ActiveDrag = {
   controllerIndex: number;
   target: THREE.Object3D;
-  startControllerPos: THREE.Vector3;
-  startRotationX: number;
+  parent: THREE.Object3D;
+  startRotationZ: number;
   startRotationY: number;
+  startAngleZ: number;
+  startAngleY: number;
   allowRotateY: boolean;
 };
 
@@ -38,10 +40,16 @@ const tempCenter = new THREE.Vector3();
 const tempSize = new THREE.Vector3();
 const worldPosition = new THREE.Vector3();
 const tempControllerPos = new THREE.Vector3();
+const tempControllerLocal = new THREE.Vector3();
+const tempDragOffset = new THREE.Vector3();
 const tempHeadPos = new THREE.Vector3();
 const tempHeadQuat = new THREE.Quaternion();
 const tempForward = new THREE.Vector3();
 const tempEuler = new THREE.Euler();
+
+function getSignedAngleDelta(startAngle: number, currentAngle: number) {
+  return Math.atan2(Math.sin(currentAngle - startAngle), Math.cos(currentAngle - startAngle));
+}
 
 const MODEL_OPTIONS = [
  // { id: 'armA', image: '/armA.png', modelPath: '/models/armA.glb', name:"Prismatic Joint" },
@@ -495,16 +503,26 @@ function XRInteraction({
         return;
       }
 
+      if (!targetJoint.parent) {
+        return;
+      }
+
       controller.getWorldPosition(tempControllerPos);
       const handedness = String(controller.userData.handedness ?? 'unknown');
       const gizmoMode: GizmoMode = handedness === 'left' ? 'rotate' : 'move';
+      const parent = targetJoint.parent;
+      tempControllerLocal.copy(tempControllerPos);
+      parent.worldToLocal(tempControllerLocal);
+      tempDragOffset.copy(tempControllerLocal).sub(targetJoint.position);
 
       activeDragRef.current = {
         controllerIndex: Number(controller.userData.index),
         target: targetJoint,
-        startControllerPos: tempControllerPos.clone(),
-        startRotationX: targetJoint.rotation.z,
+        parent,
+        startRotationZ: targetJoint.rotation.z,
         startRotationY: targetJoint.rotation.y,
+        startAngleZ: Math.atan2(tempDragOffset.y, tempDragOffset.x),
+        startAngleY: Math.atan2(tempDragOffset.z, tempDragOffset.x),
         allowRotateY: allowRotateY,
       };
 
@@ -636,20 +654,22 @@ function XRInteraction({
     }
 
     controller.getWorldPosition(tempControllerPos);
+    tempControllerLocal.copy(tempControllerPos);
+    activeDrag.parent.worldToLocal(tempControllerLocal);
+    tempDragOffset.copy(tempControllerLocal).sub(activeDrag.target.position);
 
-    const deltaY = tempControllerPos.y - activeDrag.startControllerPos.y;
-    const deltaX = tempControllerPos.x - activeDrag.startControllerPos.x;
+    const currentAngleZ = Math.atan2(tempDragOffset.y, tempDragOffset.x);
+    const currentAngleY = Math.atan2(tempDragOffset.z, tempDragOffset.x);
 
-    const rotateBoost = 6.5;
     activeDrag.target.rotation.z = THREE.MathUtils.clamp(
-      activeDrag.startRotationX + deltaY * rotateBoost,
+      activeDrag.startRotationZ + getSignedAngleDelta(activeDrag.startAngleZ, currentAngleZ),
       -Math.PI * 0.95,
       Math.PI * 0.95,
     );
 
     if (activeDrag.allowRotateY) {
       activeDrag.target.rotation.y = THREE.MathUtils.clamp(
-        activeDrag.startRotationY + deltaX * rotateBoost,
+        activeDrag.startRotationY + getSignedAngleDelta(activeDrag.startAngleY, currentAngleY),
         -Math.PI * 0.95,
         Math.PI * 0.95,
       );
